@@ -1,0 +1,2 @@
+as --64 cat.s -o cat.o
+ld -melf_x86_64 -s cat.o -o cat64
