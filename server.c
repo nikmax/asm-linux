@@ -1,4 +1,9 @@
 /* multi_server.c */
+/*
+Die Makros lassen sich recht schnell erklären. FD_ZERO() macht aus der Menge set eine leere Menge, FD_SET() fügt element der Menge set hinzu, und FD_CLR() entfernt element aus der Menge set. Mit FD_ISSET() können Sie überprüfen, ob element in der Menge set vorkommt (genauer: gesetzt ist).
+
+Das folgende Beispiel, ein einfacher TCP-Echo-Server, soll Ihnen die Funktion select() demonstrieren. Nach dem Starten des Servers dürfen Sie gerne mehrere Clients gleichzeitig starten und dem Server Nachrichten zukommen lassen. Sie werden feststellen, dass der Server keinen Client blockiert und somit ohne Problem mehrere Clients »gleichzeitig« handeln kann (echtes Multiplexing eben) – genauer FD_SETSIZE Clients. Sobald auch hier ein Client die Zeichenfolge »quit« sendet, entfernt der Server den Client (genauer: den (Socket-)Deskriptor) aus der Menge.
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -79,8 +84,7 @@ int main (void) {
   bind_socket( &sock1, INADDR_ANY, 15000 );
   listen_socket (&sock1);
   
-  for( i=0; i<FD_SETSIZE; i++)
-     client_sock[i] = -1;
+  for( i=0; i<FD_SETSIZE; i++) client_sock[i] = -1;
   FD_ZERO(&gesamt_sock);
   FD_SET(sock1, &gesamt_sock);
   for (;;) {
@@ -111,11 +115,9 @@ int main (void) {
           sock_max = sock2;
        /* höchster Index für client_sock
         * für die anschließende Schleife benötigt */
-       if( i > max )
-          max = i;
+       if( i > max ) max = i;
        /* ... weitere (Lese-)Deskriptoren bereit? */   
-       if( --ready <= 0 )
-          continue; //Nein ...
+       if( --ready <= 0 ) continue; //Nein ...
     } //if(FD_ISSET ...
     
     /* Ab hier werden alle Verbindungen von Clients auf

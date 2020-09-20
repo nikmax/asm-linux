@@ -4,24 +4,9 @@
 #      ld -melf_x86_64 -e main -s server.o -o server
 #
 #
-.set 	stdout, 	1
-.set 	stderr, 	2
-
-.set    sys_read, 	0
-.set    sys_write, 	1
-.set    sys_open, 	2
-.set    sys_close, 	3
-.set    sys_exit, 	60
-
-.set 	sys_socket, 41
-.set 	sys_bind, 	49
-.set 	sys_listen,	50
-.set 	sys_accept, 43
-.set 	sys_select, 23
-.set 	sys_fork, 	57
+.include "syscalls.inc" 
 
 .set 	buffer_size, 256
-
 
 
 
