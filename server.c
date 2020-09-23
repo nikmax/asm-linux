@@ -13,7 +13,7 @@ Das folgende Beispiel, ein einfacher TCP-Echo-Server, soll Ihnen die Funktion se
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <unistd. h.>
+#include <unistd.h>
 #define BUF 1024
 #define socket_t int
 /* Funktion gibt aufgetretene Fehler aus und 
@@ -76,7 +76,7 @@ void close_socket( socket_t *sock ){
 
 int main (void) {
   socket_t sock1, sock2, sock3;
-  int i, ready, sock_max, max=-1;
+  int a,i, ready, sock_max, max=-1;
   int client_sock[FD_SETSIZE];
   fd_set gesamt_sock, lese_sock;
   char *buffer = (char*) malloc (BUF);
@@ -109,6 +109,7 @@ int main (void) {
        /* Den neuen (Socket-)Deskriptor zur
         * (Gesamt-)Menge hinzufügen */   
        FD_SET(sock2, &gesamt_sock);
+       printf("Ein neues Client hat sich angemeldet %d\n",sock2);
        /* select() benötigt die höchste 
         * (Socket-)Deskriptor-Nummer */
        if( sock2 > sock_max )
@@ -129,10 +130,12 @@ int main (void) {
        if(FD_ISSET(sock3, &lese_sock)){
           /* ... dann die Daten lesen */
           TCP_recv (&sock3, buffer, BUF-1);
-          printf ("Nachricht empfangen: %s\n", buffer);
+          printf ("Nachricht empfangen: %s", buffer);
           /* Wenn quit erhalten wurde ... */
-          if (strcmp (buffer, "quit\n") == 0) {
+          a = strstr (buffer, "exit");
+          if (a != 0) {
              /* ... hat sich der Client beendet */
+            printf("pos: %d",a);
              //Socket schließen
              close_socket (&sock3);   
              //aus Menge löschen

@@ -6,24 +6,25 @@
 #
 .include "syscalls.inc" 
 
-.set 	buffer_size, 256
-
+.set 	buffer_size, 1024
+.set 	FD_SETSIZE,  3
 
 
 .data
-	sock: 			.quad   0
-	client: 		.quad   0     
-	echobuf: 		.space 	buffer_size
-	read_count:		.quad 	0
-	err_num: 		.quad 	0
-	num: 			.quad   0
-	#sockaddr: struckt
-	#    sin_family:	.long   0
-	#    sin_port: 		.long 	0
-	#    sin_addr: 		.quad 	0
-	#    sin_zero: 		.quad 	0
-	hello_msg: 		.ascii "Gruss got:"
-		.set hello_msg_len, . - hello_msg
+	sock1: 			.quad   0
+	sock2: 			.quad   0
+	sock3: 			.quad   0
+	ready: 			.quad 	0
+	sock_max: 		.quad	0
+	max: 			.quad 	-1
+	client_sock:	.rept 	FD_SETSIZE
+					.quad   0
+					.endr
+	gesamt_sock: 	.quad 	0
+	lese_sock: 		.quad 	0
+	buffer: 		.space 	buffer_size
+
+	hello_msg: 		.asciz "Gruss got:"
 	ok_msg: 		.asciz " ->OK\n"
 	socket_msg: 	.asciz "Initialise socket: "
 	bind_msg: 		.asciz "Try to bind socket: "
@@ -40,28 +41,33 @@
 
     # sockaddr_in structure for the address
     # the listening socket binds to
-    pop_sa:
+    server:
         sockaddr_in.sin_family: .word 2       # AF_INET
-        sockaddr_in.sin_port: 	.word 0xfeff    # port 60833
+        sockaddr_in.sin_port: 	.word 0xfeff    # port 65534
         sockaddr_in.sin_addr: 	.long 0         # localhost
         sockaddr_in.sin_zero: 	.long 0,0
-    	.set sockaddr_in_len, . - pop_sa
+    	.set sockaddr_in_len, . - server
 
 .text
 .globl main
 main:
-	# Initialise listening and client socket values to 0, 
-	# used for cleanup handling
-	xor %rax, %rax
-	mov %rax, (sock)
-	mov %rax, (client)
-	mov %rax, (err_num)
-
     # Initialize socket
     call _socket
-    
+    mov %rax, (sock_max)
+    mov %rax, (sock1)
 	# Bind and Listen
 	call _listen
+	# Initialise values to -1, used for cleanup handling
+	mov $FD_SETSIZE, %rcx
+	mov $client_sock, %rdi
+	xor %rax,%rax
+	dec %rax
+  1:mov %rax, (%rdi,%rcx,8)
+  	dec %rcx
+  	jnz 1b
+
+
+
 	# Main loop handles clients connecting "accept()"
 	# then echos any input
 	# back to the client
@@ -110,7 +116,7 @@ main:
 		jmp _exit_fork
 ####################################################################
 # Performs a sys_socket call to initialise a TCP/IP listening      #
-# socket and storing socket file descriptor in the sock variable   #
+# socket and reurn socket file descriptor in %rax                  #
 ####################################################################
 _socket:
 	mov $socket_msg, %rsi
@@ -119,17 +125,12 @@ _socket:
 	mov $sys_socket, %rax 	# SYS_SOCKET
 	mov $2, %rdi 			# AF_NET
 	mov $1, %rsi 			# SOCK_STREAM
-	mov $0, %rdx
+	mov $0, %rdx 			# protocol
 	syscall
 	# Chek socket was created correcktly
 	mov $sock_err_msg, %rsi
 	cmp $0, %rax
 	jle _fail
-	# Store socket file descriptor in variable
-	mov %rax, (sock)
-	call _print_dec
-	mov $ok_msg, %rsi
-	call _print_msg
 	ret
 ####################################################################
 # Calls sys_bind and sys_listen to start listening for connections #
@@ -138,8 +139,8 @@ _listen:
 	mov $bind_msg, %rsi
 	call _print_msg
 	mov $sys_bind, %rax 	# SYS_BIND
-	mov (sock), %rdi 			# listening socket fd
-	mov $pop_sa, %rsi 		# sockaddr in struct
+	mov (sock1), %rdi 			# listening socket fd
+	mov $server, %rsi 		# sockaddr in struct
 	mov $sockaddr_in_len, %rdx
 	syscall
 	# Check for succeeded
