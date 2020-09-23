@@ -15,6 +15,9 @@
 .set 	sys_fork, 	57
 .set 	sys_setsid,	112
 .set 	sys_rt_sigaction, 174
+
+.set 	AF_INET, 	2
+
 # int,	const struct sigaction *,	struct sigaction *,	size_t
 # sigaction	include/asm/signal.h:
 # struct sigaction {

@@ -57,7 +57,6 @@ _start:
     ;; Initialise listening and client socket values to 0, used for cleanup handling
     mov      word [sock], 0
     mov      word [client], 0
-
     ;; Initialize socket
     call     _socket
 

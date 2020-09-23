@@ -7,22 +7,16 @@
 .include "syscalls.inc" 
 
 .set 	buffer_size, 1024
-.set 	FD_SETSIZE,  3
 
 
 .data
-	sock1: 			.quad   0
-	sock2: 			.quad   0
-	sock3: 			.quad   0
-	ready: 			.quad 	0
-	sock_max: 		.quad	0
-	max: 			.quad 	-1
-	client_sock:	.rept 	FD_SETSIZE
-					.quad   0
-					.endr
-	gesamt_sock: 	.quad 	0
-	lese_sock: 		.quad 	0
+	sock: 			.quad   0
+	read_count:		.quad 	0
+	err_num:		.quad 	0
+	client:			.quad   0
+	num: 			.quad 	0
 	buffer: 		.space 	buffer_size
+
 
 	hello_msg: 		.asciz "Gruss got:"
 	ok_msg: 		.asciz " ->OK\n"
@@ -37,51 +31,46 @@
     accept_err_msg: .asciz " Could not accept connection attempt\n"
     fork_err_msg: 	.asciz " Error fork status\n"
     accept_msg:     .asciz "Client connected! -> "
+    client_closed: 	.asciz "Client closed.\n"
     crlf: 			.asciz "\n"
 
     # sockaddr_in structure for the address
     # the listening socket binds to
     server:
-        sockaddr_in.sin_family: .word 2       # AF_INET
-        sockaddr_in.sin_port: 	.word 0xfeff    # port 65534
-        sockaddr_in.sin_addr: 	.long 0         # localhost
-        sockaddr_in.sin_zero: 	.long 0,0
+        sockaddr_in.sin_family: .word AF_INET    			# 2
+        sockaddr_in.sin_port: 	.word 0x901f   # port 8080	# 2
+        sockaddr_in.sin_addr: 	.byte 0,0,0,0   # localhost # 4 
+        sockaddr_in.sin_zero: 	.quad 0 					# 8
     	.set sockaddr_in_len, . - server
 
 .text
 .globl main
 main:
+	# Initialise listening and client socket values to 0, used for cleanup handling
+    xor %rax,%rax
+    mov %rax,(client)
+    mov %rax,(sock)
     # Initialize socket
     call _socket
-    mov %rax, (sock_max)
-    mov %rax, (sock1)
+    mov %rax, (sock)
 	# Bind and Listen
 	call _listen
 	# Initialise values to -1, used for cleanup handling
-	mov $FD_SETSIZE, %rcx
-	mov $client_sock, %rdi
-	xor %rax,%rax
-	dec %rax
-  1:mov %rax, (%rdi,%rcx,8)
-  	dec %rcx
-  	jnz 1b
-
-
 
 	# Main loop handles clients connecting "accept()"
 	# then echos any input
 	# back to the client
 	main_loop:
 		call _accept
-		mov $sys_fork, %rax
-		syscall
-		cmp $0, %rax
-		mov $fork_err_msg, %rsi
-		jl  _fail
-		jnz read_loop  # fork
-		mov (client), %rdi
-	 	call _close_sock
-		jmp main_loop
+		#mov $sys_fork, %rax
+		#syscall
+		#cmp $0, %rax
+		#mov $fork_err_msg, %rsi
+		#jl  _fail
+		#jnz read_loop  # fork
+		#mov (client), %rdi
+	 	#call _close_sock
+		#jmp main_loop
 		#
 	# Read and Re-send all bytes sent by the client
 	# until the client hangs up the connection on their end
@@ -112,8 +101,10 @@ main:
 		mov (client), %rdi
 		call _close_sock
 		movq $0, (client)
+		mov $client_closed, %rsi
+		call _print_msg
 		xor %rdi, %rdi      # return 0
-		jmp _exit_fork
+		jmp main_loop
 ####################################################################
 # Performs a sys_socket call to initialise a TCP/IP listening      #
 # socket and reurn socket file descriptor in %rax                  #
@@ -139,7 +130,7 @@ _listen:
 	mov $bind_msg, %rsi
 	call _print_msg
 	mov $sys_bind, %rax 	# SYS_BIND
-	mov (sock1), %rdi 			# listening socket fd
+	mov (sock), %rdi 			# listening socket fd
 	mov $server, %rsi 		# sockaddr in struct
 	mov $sockaddr_in_len, %rdx
 	syscall
@@ -190,26 +181,26 @@ _accept:
 	call _print_msg	
 	ret
 ####################################################################
-# Reads up to 256 bytes from the client into echobuf and sets the  #
+# Reads up to 256 bytes from the client into buffer and sets the  #
 # read_count variable to be the number of bytes read by sys_read
 ####################################################################
 _read:
 	mov $sys_read, %rax
 	mov (client), %rdi
-	mov $echobuf, %rsi
+	mov $buffer, %rsi
 	mov $buffer_size, %rdx
 	syscall
 	# Copy number of bytes read to variable
 	mov %rax, (read_count)
 	ret
 ####################################################################
-# Sends up to the value of read_count bytes from echobuf to the    #
+# Sends up to the value of read_count bytes from buffer to the    #
 # client socket using sys_write 
 ####################################################################
 _echo:
 	mov $sys_write, %rax
 	mov (client), %rdi
-	mov $echobuf, %rsi
+	mov $buffer, %rsi
 	mov (read_count), %rdx
 	syscall
 	ret
@@ -255,11 +246,11 @@ _exit:
 	je 	3f
 	mov (sock), %rdi
 	call _close_sock
- 3:	#mov (client), %rax
- 	#cmp $0, %rax
- 	#je 4f
- 	#mov (client), %rdi
- 	#call _close_sock
+ 3:	mov (client), %rax
+ 	cmp $0, %rax
+ 	je 4f
+ 	mov (client), %rdi
+ 	call _close_sock
 _exit_fork:
  4:	mov $sys_exit, %rax
     #xor %rdi, %rdi      # return 0
