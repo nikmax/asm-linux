@@ -18,7 +18,7 @@
 	buffer: 		.space 	buffer_size
 
 
-	hello_msg: 		.asciz "Gruss got:"
+	hello_msg: 		.asciz "Willkommen!\n"
 	ok_msg: 		.asciz " ->OK\n"
 	socket_msg: 	.asciz "Initialise socket: "
 	bind_msg: 		.asciz "Try to bind socket: "
@@ -50,69 +50,68 @@ main:
     xor %rax,%rax
     mov %rax,(client)
     mov %rax,(sock)
-    # Initialize socket
-    call _socket
-    mov %rax, (sock)
-	# Bind and Listen
-	call _listen
-	# Initialise values to -1, used for cleanup handling
 
+	call _fork
+	test %rax, %rax
+	jnz  _daemon1
+	call _exit
+_daemon1:
+	mov $sys_setsid, %rax
+	syscall
+	#movl		$1,%EBX			# SIGHUP
+	#movl		$1,%ECX			# SIG_IGN
+
+	call _fork
+	test %rax, %rax
+	jnz  _daemon2
+	call _exit
+_daemon2:
+    # Initialize socket Bind and Listen
+    call _socket
+	call _bind
+	call _listen
 	# Main loop handles clients connecting "accept()"
 	# then echos any input
 	# back to the client
 	main_loop:
 		call _accept
-		#mov $sys_fork, %rax
-		#syscall
-		#cmp $0, %rax
-		#mov $fork_err_msg, %rsi
-		#jl  _fail
-		#jnz read_loop  # fork
-		#mov (client), %rdi
-	 	#call _close_sock
-		#jmp main_loop
-		#
+		mov %rax, %rdi
+		call _fork
+		test %rax, %rax
+		jnz  is_fork
+		#call _close_sock
+		jmp main_loop
 	# Read and Re-send all bytes sent by the client
 	# until the client hangs up the connection on their end
-	read_loop:
-#		mov $sys_write, %rax
-#		mov (client), %rdi
-#		mov $hello_msg, %rsi
-#		mov $hello_msg_len, %rdx
-#		syscall
-#
-#		mov $sys_select, %rax 	# SYS_SELECT
-#		mov $2, %rdi 			# AF_NET
-#		mov $1, %rsi 			# SOCK_STREAM
-#		mov $0, %rdx
-#		syscall
-#
-
-		call _read
-		call _echo
-
-		# read_count is set to zero when client hangs up
-		mov (read_count), %rax
-		cmp $0, %rax
-		jle 	read_complete
-		jmp read_loop
-	read_complete:
-		# Close client socket
-		mov (client), %rdi
-		call _close_sock
-		movq $0, (client)
-		mov $client_closed, %rsi
-		call _print_msg
-		xor %rdi, %rdi      # return 0
-		jmp main_loop
+	is_fork:#%rdi - socket fork
+		mov %rdi,(client)
+		mov $hello_msg, %rsi
+		call _print_msg_fd
+			read_loop:
+			call _read
+			call _echo
+			# read_count is set to zero when client hangs up
+			mov (read_count), %rax
+			cmp $0, %rax
+			jle 	read_complete
+			jmp read_loop
+		read_complete:
+			# Close client socket
+			mov (client), %rdi
+			call _close_sock
+			movq $0, (client)
+			mov $client_closed, %rsi
+			call _print_msg
+			xor %rdi, %rdi      # return 0
+			mov %rdi, (err_num)
+			mov (client), %rdi
+			call _close_sock
+			jmp _exit
 ####################################################################
 # Performs a sys_socket call to initialise a TCP/IP listening      #
 # socket and reurn socket file descriptor in %rax                  #
 ####################################################################
 _socket:
-	mov $socket_msg, %rsi
-	call _print_msg
-
 	mov $sys_socket, %rax 	# SYS_SOCKET
 	mov $2, %rdi 			# AF_NET
 	mov $1, %rsi 			# SOCK_STREAM
@@ -121,14 +120,13 @@ _socket:
 	# Chek socket was created correcktly
 	mov $sock_err_msg, %rsi
 	cmp $0, %rax
-	jle _fail
+	jl _fail
+    mov %rax, (sock)
 	ret
 ####################################################################
 # Calls sys_bind and sys_listen to start listening for connections #
 ####################################################################
-_listen:
-	mov $bind_msg, %rsi
-	call _print_msg
+_bind:
 	mov $sys_bind, %rax 	# SYS_BIND
 	mov (sock), %rdi 			# listening socket fd
 	mov $server, %rsi 		# sockaddr in struct
@@ -138,21 +136,17 @@ _listen:
 	mov $bind_err_msg, %rsi
 	cmp $0, %rax
 	jl _fail
+	ret
+_listen:
 	# Bind succeeded, call sys_listen
-	#call _print_dec
-	#mov $ok_msg, %rsi
-	#call _print_msg
-	#mov $listen_msg, %rsi
-	#call _print_msg
 	mov $sys_listen, %rax	# SYS_LISTEN
+	mov (sock), %rdi 			# listening socket fd
 	mov $1, %rsi 			# backlog (dummy value really)
 	syscall
 	# Check for success
 	mov $lstn_err_msg, %rsi
 	cmp $0, %rax
 	jl _fail
-	mov $ok_msg, %rsi
-	call _print_msg
 	ret
 ####################################################################
 # Accepts a connection from a client, storing the client socket    #
@@ -170,15 +164,26 @@ _accept:
 	cmp $0, %rax
 	jl 	_fail
 	# Store returned fd in variable
-	mov %rax, (client)
+	#mov %rax, (client)
 	push %rax
 	# Log connection to stdout
 	mov $accept_msg, %rsi
 	call _print_msg
 	pop %rax
+	push %rax
 	call _print_dec
 	mov $crlf, %rsi
 	call _print_msg	
+	pop %rax
+	ret
+####################################################################
+_fork:
+	mov $sys_fork, %rax	# SYS_LISTEN
+	syscall
+	# Check for success
+	mov $fork_err_msg, %rsi
+	cmp $0, %rax
+	jl _fail
 	ret
 ####################################################################
 # Reads up to 256 bytes from the client into buffer and sets the  #
@@ -203,6 +208,11 @@ _echo:
 	mov $buffer, %rsi
 	mov (read_count), %rdx
 	syscall
+	mov $sys_write, %rax
+	mov $stdout, %rdi
+	mov $buffer, %rsi
+	mov (read_count), %rdx
+	syscall
 	ret
 ####################################################################
 # Performs sys_close on the socket in %rdi                         #
@@ -215,8 +225,15 @@ _close_sock:
 # %rsi contains address to a message                                        #
 ####################################################################
 _print_msg:
+	push %rdi
 	mov $stdout, %rdi		# %rdi stdout
-	_print_msg_fail:
+	call _print_msg_fd
+	pop %rdi
+	ret
+_print_msg_fd:# %rdi -fd , %rsi - msg
+	push %rdx
+	push %rax
+	push %rcx
 	xor %rdx,%rdx
  1:	cmpb $0,(%rdx,%rsi)
 	je  2f
@@ -224,6 +241,9 @@ _print_msg:
 	jmp 1b
  2:	mov $sys_write, %rax 	# %rdx contains number of chars
 	syscall
+	pop %rcx
+	pop %rax
+	pop %rdx
 	ret
 ####################################################################
 # Calls the sys_write syscall, writing an error message to stderr, #
@@ -234,8 +254,8 @@ _fail:
 	mov %rax, (err_num)
 	call _print_dec
 	mov $stderr, %rdi
-	call _print_msg_fail
-	mov $1, %rdi
+	call _print_msg_fd
+	#mov $1, %rdi
 ####################################################################
 # Exits cleanly, checking if the listening or client sockets need  #
 # to be closed before calling sys_exit                             #
@@ -245,40 +265,47 @@ _exit:
 	cmp $0, %rax
 	je 	3f
 	mov (sock), %rdi
-	call _close_sock
+	#call _close_sock
  3:	mov (client), %rax
  	cmp $0, %rax
  	je 4f
  	mov (client), %rdi
- 	call _close_sock
-_exit_fork:
+ 	#call _close_sock
  4:	mov $sys_exit, %rax
-    #xor %rdi, %rdi      # return 0
     mov (err_num), %rdi
     syscall
-
 _print_dec: # zahl in %rax
+		push 	%r8
+		push 	%r9
+		push 	%rsi
+		push 	%rdx
+		push 	%rax
         mov     $10,  %r8      # Divisor
         xor     %r9, %r9      # Zähler für Anzahl der Ziffern
         mov     $10, %rsi    # zum testen 
         #push    %rsi
         #inc     %r9
-  lo: 	#
+  	1: 	#
         xor     %rdx, %rdx      # die Zahl in rdx:rax
         div     %r8
         add     $48,  %dl        # in ein Symbol konvertieren
         push    %rdx
         inc     %r9
         or      %rax, %rax      # sind wir fertig?
-        jnz     lo
+        jnz     1b
         mov     $sys_write, %rax
         mov     $1,  %rdi        # STDOUT
         mov     $1,  %rdx        # nur einen Byte
-  display:
+  	2:
         pop     %rsi
         mov     %rsi, (num)
         mov     $num, %rsi       # buffer
         syscall
         dec     %r9
-        jnz     display
+        jnz     2b
+        pop 	%rax
+        pop 	%rdx
+        pop 	%rsi
+        pop 	%r9
+        pop 	%r8
         ret

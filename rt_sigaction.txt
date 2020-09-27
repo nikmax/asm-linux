@@ -1,0 +1,40 @@
+int rt_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+signum – signal number
+act – structure for the new action
+oldact – structure for the old action
+
+struct sigaction {
+    void     (*sa_handler)(int);
+    void     (*sa_sigaction)(int, siginfo_t *, void *);
+    sigset_t   sa_mask;
+    int        sa_flags;
+    void     (*sa_restorer)(void);
+};
+
+siginfo_t {
+    int      si_signo;      /* signal number */
+    int      si_errno;      /* errno value */
+    int      si_code;       /* signal code */
+    int      si_trapno;     /* trap that caused hardware signal (unusued on most architectures) */
+    pid_t    si_pid;        /* sending PID */
+    uid_t    si_uid;        /* real UID of sending program */
+    int      si_status;     /* exit value or signal */
+    clock_t  si_utime;      /* user time consumed */
+    clock_t  si_stime;      /* system time consumed */
+    sigval_t si_value;      /* signal value */
+    int      si_int;        /* POSIX.1b signal */
+    void    *si_ptr;        /* POSIX.1b signal */
+    int      si_overrun;    /* count of timer overrun */
+    int      si_timerid;    /* timer ID */
+    void    *si_addr;       /* memory location that generated fault */
+    long     si_band;       /* band event */
+    int      si_fd;         /* file descriptor */
+    short    si_addr_lsb;   /* LSB of address */
+    void    *si_lower;      /* lower bound when address vioation occured */
+    void    *si_upper;      /* upper bound when address violation occured */
+    int      si_pkey;       /* protection key on PTE causing faut */
+    void    *si_call_addr;  /* address of system call instruction */
+    int      si_syscall;    /* number of attempted syscall */
+    unsigned int si_arch;   /* arch of attempted syscall */
+}
+

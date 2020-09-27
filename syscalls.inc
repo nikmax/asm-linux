@@ -15,6 +15,7 @@
 .set 	sys_fork, 	57
 .set 	sys_setsid,	112
 .set 	sys_rt_sigaction, 174
+.set 	sys_umask, 	95
 
 .set 	AF_INET, 	2
 
