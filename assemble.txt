@@ -1,0 +1,15 @@
+vi ./hello-int80.s
+as --32 hello-int80.s -o hello-int80.o
+ld -melf_i386 -s hello-int80.s -o hello-int80
+chmod a+x hello-int80
+./hello-int80 
+  
+vi ./hello64.s
+as --64 hello-int80.s -o hello64-int80.o
+ld -melf_x86 -s hello64-int80.o -o hello64-int80
+ld -melf_x86_64 -s hello64-int80.o -o hello64-int80
+./hello64-int80 
+./hello64
+  
+ gdb ./hello64
+
